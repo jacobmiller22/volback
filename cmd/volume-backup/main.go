@@ -45,10 +45,7 @@ func setupEncryptor(key string) (*cipher.Stream, error) {
 		return nil, err
 	}
 
-	s := cipher.NewCFBEncrypter(block, iv)
-	if err != nil {
-		return nil, err
-	}
+	s := cipher.NewCTR(block, iv)
 	return &s, nil
 }
 
@@ -243,37 +240,4 @@ func (bo *BackupOrchestrator) Backup(path string) error {
 	// Push
 	destP := stdpath.Join(bo.prefix, filename)
 	return bo.pusher.Push(er, destP)
-}
-
-type backupConfig struct {
-	endpoint  string
-	bucket    string
-	path      string
-	secretId  string
-	secretKey string
-	token     string
-
-	encrypt bool
-}
-
-func backup(path string, backupCfg backupConfig) error {
-	creds := credentials.NewStaticCredentials(backupCfg.secretId, backupCfg.secretKey, backupCfg.token)
-	cfg := aws.NewConfig().WithEndpoint(backupCfg.endpoint).WithCredentials(creds)
-	sess, err := session.NewSession(cfg)
-	if err != nil {
-		return err
-	}
-
-	uploader := s3manager.NewUploader(sess)
-
-	key := backupCfg.path + path
-
-	upParams := s3manager.UploadInput{
-		Bucket: &backupCfg.bucket,
-		Key:    &key,
-	}
-
-	_, err = uploader.Upload(&upParams)
-
-	return err
 }
