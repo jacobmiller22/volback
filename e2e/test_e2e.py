@@ -123,7 +123,7 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
     This test will backup a file, and restore the file and confirm nothing was lost.
 
     Source: fs
-    Destination: fs
+    Destination: s3
     """
 
     k = encryption_key(23)
@@ -175,6 +175,79 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
     original_data = open(original_path, "rb").read()
     encrypted_data = io.BytesIO()
     s3client.Bucket(S3_BUCKET_NAME_1).download_fileobj(encrypted_path, encrypted_data)
+    restored_data = open(restored_path, "rb").read()
+
+    assert original_data != encrypted_data
+    assert original_data == restored_data
+
+
+def test_fs2fs_no_config(cleanup_testdata):
+    """
+    This test will backup a file, and restore the file and confirm nothing was lost. All while using no config file.
+
+    Source: fs
+    Destination: fs
+    """
+
+    k = encryption_key(17)
+
+    original_path = E2E_ROOT_PATH.joinpath("./testdata/lorem.pt")
+    encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct")
+    restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct.pt")
+
+    # {
+    # 	"source": {
+    # 		"kind": "fs",
+    # 		"path": "testdata/lorem.pt"
+    # 	},
+    # 	"restore": false,
+    # 	"encryption": {
+    # 		"key": "temp size 16 key"
+    # 	},
+    # 	"destination": {
+    # 		"kind": "fs",
+    # 		"path": "testdata/generated/lorem-0.pt.ct"
+    # 	}
+    # }
+
+    cp = subprocess.run(
+        [
+            BIN_PATH,
+            "-src.kind",
+            "fs",
+            "-src.path",
+            original_path.absolute().as_posix(),
+            "--restore=false",
+            "--enc.key",
+            k,
+            "-dst.kind",
+            "fs",
+            "-dst.path",
+            encrypted_path.absolute().as_posix(),
+        ]
+    )
+    assert cp.returncode == 0
+
+    cp = subprocess.run(
+        [
+            BIN_PATH,
+            "-src.kind",
+            "fs",
+            "-src.path",
+            encrypted_path.absolute().as_posix(),
+            "--restore=true",
+            "-dst.kind",
+            "fs",
+            "-dst.path",
+            restored_path.absolute().as_posix(),
+            "--enc.key",
+            k,
+        ]
+    )
+    assert cp.returncode == 0
+
+    original_data = open(original_path, "rb").read()
+    encrypted_data = open(encrypted_path, "rb").read()
     restored_data = open(restored_path, "rb").read()
 
     assert original_data != encrypted_data

@@ -94,7 +94,12 @@ func (cl *configLoader) Load() (*Config, error) {
 	}
 	configs = append(configs, flagCfg)
 
-	jsonCfg, err := ConfigFromJsonPath(flagCfg.JsonConfigPath)
+	var jsonCfg *Config
+	if flagCfg.JsonConfigPath == "" {
+		jsonCfg = &Config{}
+	} else {
+		jsonCfg, err = ConfigFromJsonPath(flagCfg.JsonConfigPath)
+	}
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
