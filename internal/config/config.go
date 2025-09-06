@@ -197,9 +197,6 @@ func (c *Config) Validate() error {
 	if c.Encryption.Key == "" {
 		return fmt.Errorf("encryption key is required")
 	}
-	if len(c.Encryption.Key) != 16 && len(c.Encryption.Key) != 24 && len(c.Encryption.Key) != 32 {
-		return fmt.Errorf("encryption key must be 16, 24, or 32 bytes long")
-	}
 
 	return nil
 }

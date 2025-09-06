@@ -4,10 +4,9 @@ e2e.py provides tests for e2e volback behavior
 
 import io
 import boto3
-import testcontainers.core.container
+import secrets
 import botocore.client
 import testcontainers.localstack
-import testcontainers.core.waiting_utils
 import pathlib
 import pytest
 import subprocess
@@ -69,6 +68,12 @@ def cleanup_testdata():
     # os.remove("./testdata/generated")
 
 
+def encryption_key(size: int):
+    """Randomly generate an encryption key for each test."""
+
+    return secrets.token_hex(32)[:size]
+
+
 def test_e2e_fs2fs(cleanup_testdata):
     """
     This test will backup a file, and restore the file and confirm nothing was lost.
@@ -76,6 +81,8 @@ def test_e2e_fs2fs(cleanup_testdata):
     Source: fs
     Destination: fs
     """
+
+    k = encryption_key(17)
 
     original_path = E2E_ROOT_PATH.joinpath("./testdata/lorem.pt")
     encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct")
@@ -86,6 +93,8 @@ def test_e2e_fs2fs(cleanup_testdata):
             BIN_PATH,
             "-f",
             E2E_ROOT_PATH.joinpath("./testdata/backup_fs2fs.json").as_posix(),
+            "--enc.key",
+            k,
         ]
     )
     assert cp.returncode == 0
@@ -95,6 +104,8 @@ def test_e2e_fs2fs(cleanup_testdata):
             BIN_PATH,
             "-f",
             E2E_ROOT_PATH.joinpath("./testdata/backup_fs2fs_restore.json").as_posix(),
+            "--enc.key",
+            k,
         ]
     )
     assert cp.returncode == 0
@@ -115,6 +126,8 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
     Destination: fs
     """
 
+    k = encryption_key(23)
+
     original_path = E2E_ROOT_PATH.joinpath("./testdata/lorem.pt")
     encrypted_path = "testdata/generated/lorem-1.pt.ct"
     restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-1.pt.ct.pt")
@@ -126,6 +139,8 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
             E2E_ROOT_PATH.joinpath("./testdata/backup_fs2s3.json").as_posix(),
             "--src.path",
             original_path,
+            "--enc.key",
+            k,
             "--dst.path",
             encrypted_path,
             "--dst.s3-endpoint",
@@ -148,6 +163,8 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
             lsendpointurl,
             "--src.s3-bucket",
             S3_BUCKET_NAME_1,
+            "--enc.key",
+            k,
             "--dst.path",
             restored_path,
         ],
