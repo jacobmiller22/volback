@@ -1,0 +1,14 @@
+{
+	"source": {
+		"kind": "fs",
+		"path": "testdata/generated/lorem-0.pt.ct"
+	},
+	"restore": true,
+	"encryption": {
+		"key": "temp size 16 key"
+	},
+	"destination": {
+		"kind": "fs",
+		"path": "testdata/generated/lorem-0.pt.ct.pt"
+	}
+}

@@ -1,15 +1,14 @@
-.DEFAULT: 
-	build
 .PHONY: fmt vet build test
+all: fmt vet test build 
+
+build: vet
+	go build -o ./bin/volback ./cmd/volume-backup
 
 fmt:
 	go fmt ./...
 
 vet: fmt
 	go vet ./...
-
-build: vet
-	go build -o ./bin/volume-backup ./cmd/volume-backup
 
 test: 
 	go test -v ./...

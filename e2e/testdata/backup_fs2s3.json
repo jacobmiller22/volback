@@ -1,0 +1,15 @@
+{
+	"source": {
+		"kind": "fs"
+	},
+	"restore": false,
+	"encryption": {
+		"key": "temp size 16 key"
+	},
+	"destination": {
+		"kind": "s3",
+		"s3_access_key_id": "test",
+		"s3_secret_access_key": "test",
+		"s3_region": "us-east-1"
+	}
+}

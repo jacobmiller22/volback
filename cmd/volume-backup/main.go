@@ -2,139 +2,154 @@ package main
 
 import (
 	"bufio"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"errors"
+	"log"
+
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	stdpath "path"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/jacobmiller22/volume-backup/zip"
+	"github.com/jacobmiller22/volume-backup/internal/config"
+	"github.com/jacobmiller22/volume-backup/internal/crypto"
 )
 
-type multiString []string
+func configureAwsSession(envCfg *config.EnvironmentConfig, loc *config.Location) (*session.Session, error) {
+	s, err := session.NewSession(
+		aws.
+			NewConfig().
+			WithEndpoint(
+				loc.S3_Endpoint,
+			).
+			WithRegion(
+				loc.S3_Region,
+			).
+			WithCredentials(
+				credentials.NewStaticCredentials(
+					loc.S3_AccessKeyId,
+					loc.S3_SecretAccessKey,
+					"",
+				),
+			),
+	)
 
-func (m *multiString) String() string {
-	return fmt.Sprint(*m)
-}
-
-func (m *multiString) Set(value string) error {
-	*m = append(*m, value)
-	return nil
-}
-
-func setupEncryptor(key string) (*cipher.Stream, error) {
-
-	// Create a block cipher from a secret key
-	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a random nonce
-	iv := make([]byte, block.BlockSize())
-	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
-		return nil, err
+	if envCfg.S3ForcePathStyle {
+		s.Config.S3ForcePathStyle = aws.Bool(true)
 	}
 
-	s := cipher.NewCTR(block, iv)
-	return &s, nil
+	return s, nil
 }
 
-type config struct {
-	Source struct {
-		Paths multiString `json:"paths"`
-	} `json:"source"`
-	Encryption struct {
-		Key string `json:"encryption_key"`
+func configurePuller(envCfg *config.EnvironmentConfig, source *config.Location) (Puller, error) {
+	switch source.Kind {
+	case "s3":
+
+		sess, err := configureAwsSession(envCfg, source)
+		if err != nil {
+			return nil, err
+		}
+
+		return &S3PushPuller{
+			s:      sess,
+			bucket: source.S3_Bucket,
+		}, nil
+	case "fs":
+		return &FsPushPuller{}, nil
+	default:
+		return nil, fmt.Errorf("invalid source kind")
 	}
-	Destination struct {
-		Prefix             string `json:"prefix"`
-		Kind               string `json:"type"`
-		S3_AccessKeyId     string `json:"s3_access_key_id"`
-		S3_SecretAccessKey string `json:"s3_secret_access_key"`
-		S3_Endpoint        string `json:"s3_endpoint"`
-		S3_Bucket          string `json:"s3_bucket"`
-		S3_Region          string `json:"s3_region"`
-	} `json:"destination"`
+}
+
+func configurePusher(envCfg *config.EnvironmentConfig, source *config.Location) (Pusher, error) {
+	switch source.Kind {
+	case "s3":
+
+		sess, err := configureAwsSession(envCfg, source)
+		if err != nil {
+			return nil, err
+		}
+
+		return &S3PushPuller{
+			s:      sess,
+			bucket: source.S3_Bucket,
+		}, nil
+	case "fs":
+		return &FsPushPuller{}, nil
+	default:
+		return nil, fmt.Errorf("invalid source kind")
+	}
 }
 
 func main() {
 
-	var cfg config
-
-	flag.Var(&cfg.Source.Paths, "path", "Path to a folder to backup.")
-	flag.StringVar(&cfg.Encryption.Key, "enc.key", "", "The key to use for encryption")
-	flag.StringVar(&cfg.Destination.Kind, "dest.kind", "s3", "the type of destination")
-	flag.StringVar(&cfg.Destination.Prefix, "dest.prefix", "", "Path to a folder or file to backup.")
-	flag.StringVar(&cfg.Destination.S3_Endpoint, "dest.endpoint", "", "Hostname to use as an endpoint for s3 compatible storage")
-	flag.StringVar(&cfg.Destination.S3_Bucket, "dest.bucket", "", "Name of the bucket to backup to")
-	flag.StringVar(&cfg.Destination.S3_AccessKeyId, "dest.access-key-id", "", "The access key id")
-	flag.StringVar(&cfg.Destination.S3_SecretAccessKey, "dest.secret-access-key", "", "The secret access key")
-	flag.StringVar(&cfg.Destination.S3_Region, "dest.region", "us-east-1", "The secret access key")
-
-	flag.Parse()
-
-	if cfg.Encryption.Key == "" {
-		panic("Encryption key must be set!")
-	}
-
-	puller := &FsPushPuller{}
-
-	sess, err := session.NewSession(
-		aws.NewConfig().WithEndpoint(
-			cfg.Destination.S3_Endpoint,
-		).WithRegion(
-			cfg.Destination.S3_Region,
-		).WithCredentials(
-			credentials.NewStaticCredentials(
-				cfg.Destination.S3_AccessKeyId,
-				cfg.Destination.S3_SecretAccessKey,
-				"",
-			),
-		),
-	)
-
+	envCfg, err := config.LoadEnvironmentConfig()
 	if err != nil {
-		panic("error creating aws session")
+		log.Fatalf("Error loading environment config: %v\n", err)
 	}
 
-	pusher := &S3PushPuller{
-		s:      sess,
-		bucket: cfg.Destination.S3_Bucket,
-	}
-
-	s, err := setupEncryptor(cfg.Encryption.Key)
-
+	cfg, err := config.NewConfigLoader().WithFlagSet(flag.CommandLine, os.Args[1:]).Load()
 	if err != nil {
-		panic("unhandled error setting up encryptor")
+		log.Fatalf("Error loading config: %v\n", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuration error: %v\n", err)
+	}
+
+	puller, err := configurePuller(envCfg, &cfg.Source)
+	if err != nil {
+		log.Fatalf("Error setting up puller: %v\n", err)
+	}
+	pusher, err := configurePusher(envCfg, &cfg.Destination)
+	if err != nil {
+		log.Fatalf("Error setting up pusher: %v\n", err)
+	}
+
+	enc, err := crypto.NewStreamEncryptor(cfg.Encryption.Key)
+	if err != nil {
+		panic("unhandled error setting up stream encryptor")
+	}
+	dec, err := crypto.NewStreamDecryptor(cfg.Encryption.Key)
+	if err != nil {
+		panic("unhandled error setting up stream decryptor")
 	}
 
 	o := BackupOrchestrator{
-		puller:    puller,
-		pusher:    pusher,
-		prefix:    cfg.Destination.Prefix,
-		encryptor: s,
+		puller:          puller,
+		pusher:          pusher,
+		destinationPath: cfg.Destination.Path,
+		encryptor:       enc,
+		decryptor:       dec,
 	}
 
-	// For each path, follow destination config
-	for _, p := range cfg.Source.Paths {
-		if err := o.Backup(p); err != nil {
-			fmt.Printf("Something went wrong while backing up path: %s; %v\n", p, err)
+	if cfg.Restore {
+		if err := o.Restore(cfg.Source.Path); err != nil {
+			log.Printf("Something went wrong while restoring path: %s; %v\n", cfg.Source.Path, err)
+			os.Exit(1)
+		}
+
+	} else {
+		if err := o.Backup(cfg.Source.Path); err != nil {
+			log.Printf("Something went wrong while backing up path: %s; %v\n", cfg.Source.Path, err)
+			os.Exit(1)
 		}
 	}
-	fmt.Printf("Done backing up!!\n")
 }
 
 var ErrIsDir error = fmt.Errorf("cannot pull reader: is_directory")
+
+type info struct {
+	size int64
+}
 
 type Puller interface {
 	// download
@@ -149,15 +164,11 @@ type Pusher interface {
 type FsPushPuller struct{}
 
 func (p *FsPushPuller) Pull(path string) (io.Reader, error) {
-	info, err := os.Stat(path)
+	fd, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	if info.IsDir() {
-		return nil, ErrIsDir
-	}
-
-	return os.Open(path)
+	return fd, nil
 }
 
 func (p *FsPushPuller) Push(r io.Reader, path string) error {
@@ -176,7 +187,10 @@ func (p *FsPushPuller) Push(r io.Reader, path string) error {
 	w := bufio.NewWriter(fd)
 
 	_, err = io.Copy(w, r)
-	return err
+	if err != nil {
+		return err
+	}
+	return w.Flush()
 }
 
 type S3PushPuller struct {
@@ -185,7 +199,18 @@ type S3PushPuller struct {
 }
 
 func (p *S3PushPuller) Pull(path string) (io.Reader, error) {
-	panic("not implemented")
+	client := s3.New(p.s)
+	input := &s3.GetObjectInput{
+		Bucket: &p.bucket,
+		Key:    &path,
+	}
+	output, err := client.GetObject(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object from S3, %w", err)
+	}
+
+	return output.Body, nil
+
 }
 
 func (p *S3PushPuller) Push(r io.Reader, path string) error {
@@ -203,41 +228,38 @@ func (p *S3PushPuller) Push(r io.Reader, path string) error {
 }
 
 type BackupOrchestrator struct {
-	puller    Puller
-	pusher    Pusher
-	prefix    string
-	encryptor *cipher.Stream
+	puller          Puller
+	pusher          Pusher
+	destinationPath string
+	encryptor       *crypto.StreamEncryptor
+	decryptor       *crypto.StreamDecryptor
 }
 
 func (bo *BackupOrchestrator) Backup(path string) error {
+	log.Printf("Backing up %s to %s\n", path, bo.destinationPath)
+
 	// Pull
-	filename := stdpath.Base(path)
-
 	r, err := bo.puller.Pull(path)
-	isDir := errors.Is(err, ErrIsDir)
-	if err != nil && !isDir {
-		return err
-	}
-
-	// Zip
-	if isDir {
-		r, err = zip.ZipDir(path)
-	} else {
-		r, err = zip.ZipReader(r, filename)
-	}
 	if err != nil {
 		return err
 	}
-	filename += ".zip"
 
-	// Encrypt
-	er := cipher.StreamReader{
-		S: *bo.encryptor,
-		R: r,
-	}
-	filename += ".enc"
+	// Setup Encryption
+	bo.encryptor.SetReader(r)
 
 	// Push
-	destP := stdpath.Join(bo.prefix, filename)
-	return bo.pusher.Push(er, destP)
+	return bo.pusher.Push(bo.encryptor, bo.destinationPath)
+}
+
+func (bo *BackupOrchestrator) Restore(path string) error {
+	log.Printf("Restoring from %s to %s\n", path, bo.destinationPath)
+
+	r, err := bo.puller.Pull(path)
+	if err != nil {
+		return err
+	}
+
+	bo.decryptor.SetReader(r)
+
+	return bo.pusher.Push(bo.decryptor, bo.destinationPath)
 }
