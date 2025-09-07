@@ -8,17 +8,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestLoadEnvironmentConfig(t *testing.T) {
+func TestConfigFromEnv(t *testing.T) {
 	// Set environment variable for testing
 	os.Setenv("S3_FORCE_PATH_STYLE", "true")
 	defer os.Unsetenv("S3_FORCE_PATH_STYLE")
 
-	cfg, err := LoadEnvironmentConfig()
+	cfg, err := ConfigFromEnv()
 	if err != nil {
 		t.Fatalf("Failed to load environment config: %v", err)
 	}
 
-	expectedCfg := &EnvironmentConfig{
+	expectedCfg := &Config{
 		S3ForcePathStyle: true,
 	}
 
