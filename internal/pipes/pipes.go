@@ -60,7 +60,6 @@ func NewIOPipeline(pipes []IOPipe) (*IOPipeline, error) {
 // IOPipeline.Execute configures multiple IO stages together to form a concurrent processing
 // pipeline where input is taken from the given io.reader, and output can be read from the
 // returned io.Reader
-
 // Processing errors get propogated to the .CloseWithError() calls.
 func (pl *IOPipeline) Execute(ctx context.Context, r io.Reader) io.Reader {
 	for _, pipe := range pl.pipes {
