@@ -14,7 +14,7 @@ import subprocess
 PROJECT_ROOT_PATH = pathlib.Path(__file__).parent.parent.absolute()
 SHELL_PATH = PROJECT_ROOT_PATH
 BIN_PATH = PROJECT_ROOT_PATH.joinpath("bin/volback")
-CMD_PATH = PROJECT_ROOT_PATH.joinpath("cmd/volume-backup")
+CMD_PATH = PROJECT_ROOT_PATH.joinpath("cmd/volback")
 BUILD_CMD = f"go build -o {BIN_PATH} {CMD_PATH}"
 E2E_ROOT_PATH = PROJECT_ROOT_PATH.joinpath("e2e")
 
