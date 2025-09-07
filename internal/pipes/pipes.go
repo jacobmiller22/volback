@@ -57,6 +57,11 @@ func NewIOPipeline(pipes []IOPipe) (*IOPipeline, error) {
 	}, nil
 }
 
+// IOPipeline.Execute configures multiple IO stages together to form a concurrent processing
+// pipeline where input is taken from the given io.reader, and output can be read from the
+// returned io.Reader
+
+// Processing errors get propogated to the .CloseWithError() calls.
 func (pl *IOPipeline) Execute(ctx context.Context, r io.Reader) io.Reader {
 	for _, pipe := range pl.pipes {
 		pr, pw := io.Pipe()
@@ -79,46 +84,3 @@ func (pl *IOPipeline) Execute(ctx context.Context, r io.Reader) io.Reader {
 
 	return r
 }
-
-// IOPipeline.Execute configures multiple IO stages together to form a concurrent processing
-// pipeline where input is taken from the given io.reader, and output can be read from the
-// returned io.Reader
-
-// Processing errors get propogated to the .CloseWithError() calls.
-// func IOPipeline(ctx context.Context, r io.Reader, stages []*IOPipe) (io.Reader, error) {
-// 	if len(stages) == 0 {
-// 		return r, nil
-// 	}
-
-// 	// Validate
-// 	for i, pipe := range stages {
-// 		if pipe == nil {
-// 			return nil, fmt.Errorf("%w: pipe at index %d is nil", ErrConfig, i)
-// 		}
-// 		if pipe.Transform == nil {
-// 			return nil, fmt.Errorf("%w: pipe at index %d has nil StreamTransform", ErrConfig, i)
-// 		}
-// 	}
-
-// 	// Execute
-// 	for _, pipe := range stages {
-// 		pr, pw := io.Pipe()
-
-// 		go func(p *IOPipe, reader io.Reader, writer *io.PipeWriter) {
-// 			if closer, ok := reader.(io.Closer); ok {
-// 				defer closer.Close()
-// 			}
-
-// 			err := p.Process(ctx, reader, writer)
-
-// 			defer writer.CloseWithError(err)
-// 			if err != nil {
-// 				slog.DebugContext(ctx, "process_error", "name", p.Name, "error", err)
-// 			}
-// 		}(pipe, r, pw)
-
-// 		r = pr
-// 	}
-
-// 	return r, nil
-// }
