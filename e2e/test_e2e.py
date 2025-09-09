@@ -2,6 +2,7 @@
 e2e.py provides tests for e2e volback behavior
 """
 
+import os
 import io
 import boto3
 import secrets
@@ -22,6 +23,10 @@ LOCALSTACK_IMAGE = "localstack/localstack"
 
 S3_BUCKET_NAME_1 = "bucket-a"
 S3_BUCKET_NAME_2 = "bucket-b"
+
+VOLBACK_DEFAULT_ENV = {
+    "AWS_REGION": "us-east-1",
+}
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -86,7 +91,9 @@ def test_e2e_fs2fs(cleanup_testdata):
 
     original_path = E2E_ROOT_PATH.joinpath("./testdata/lorem.pt")
     encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct")
-    restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct.pt")
+    restored_path = E2E_ROOT_PATH.joinpath(
+        "./testdata/generated/lorem-0.pt.ct.pt/lorem.pt"
+    )
 
     cp = subprocess.run(
         [
@@ -95,7 +102,8 @@ def test_e2e_fs2fs(cleanup_testdata):
             E2E_ROOT_PATH.joinpath("./testdata/backup_fs2fs.json").as_posix(),
             "--enc.key",
             k,
-        ]
+        ],
+        env=VOLBACK_DEFAULT_ENV,
     )
     assert cp.returncode == 0
 
@@ -106,7 +114,8 @@ def test_e2e_fs2fs(cleanup_testdata):
             E2E_ROOT_PATH.joinpath("./testdata/backup_fs2fs_restore.json").as_posix(),
             "--enc.key",
             k,
-        ]
+        ],
+        env=VOLBACK_DEFAULT_ENV,
     )
     assert cp.returncode == 0
 
@@ -148,7 +157,7 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
             "--dst.s3-bucket",
             S3_BUCKET_NAME_1,
         ],
-        env={"S3_FORCE_PATH_STYLE": "true"},
+        env={**VOLBACK_DEFAULT_ENV, "S3_FORCE_PATH_STYLE": "true"},
     )
     assert cp.returncode == 0
 
@@ -168,14 +177,14 @@ def test_e2e_fs2s3(cleanup_testdata, s3client, lsendpointurl):
             "--dst.path",
             restored_path,
         ],
-        env={"S3_FORCE_PATH_STYLE": "true"},
+        env={**VOLBACK_DEFAULT_ENV, "S3_FORCE_PATH_STYLE": "true"},
     )
     assert cp.returncode == 0
 
     original_data = open(original_path, "rb").read()
     encrypted_data = io.BytesIO()
     s3client.Bucket(S3_BUCKET_NAME_1).download_fileobj(encrypted_path, encrypted_data)
-    restored_data = open(restored_path, "rb").read()
+    restored_data = open(restored_path.joinpath("lorem.pt"), "rb").read()
 
     assert original_data != encrypted_data
     assert original_data == restored_data
@@ -192,8 +201,8 @@ def test_fs2fs_no_config(cleanup_testdata):
     k = encryption_key(17)
 
     original_path = E2E_ROOT_PATH.joinpath("./testdata/lorem.pt")
-    encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct")
-    restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-0.pt.ct.pt")
+    encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-2.pt.ct")
+    restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/lorem-2.pt.ct.pt")
 
     # {
     # 	"source": {
@@ -248,7 +257,62 @@ def test_fs2fs_no_config(cleanup_testdata):
 
     original_data = open(original_path, "rb").read()
     encrypted_data = open(encrypted_path, "rb").read()
-    restored_data = open(restored_path, "rb").read()
+    restored_data = open(restored_path.joinpath("lorem.pt"), "rb").read()
 
     assert original_data != encrypted_data
     assert original_data == restored_data
+
+
+def test_fs2fs_directory(cleanup_testdata):
+    """
+    This test will backup a file, and restore the file and confirm nothing was lost. All while using no config file.
+
+    Source: fs
+    Destination: fs
+    """
+
+    k = encryption_key(17)
+
+    original_path = E2E_ROOT_PATH.joinpath("./testdata/testarchive")
+    encrypted_path = E2E_ROOT_PATH.joinpath("./testdata/generated/testarchive.zip.ct")
+    restored_path = E2E_ROOT_PATH.joinpath("./testdata/generated/testarchive")
+
+    cp = subprocess.run(
+        [
+            BIN_PATH,
+            "-src.kind",
+            "fs",
+            "-src.path",
+            original_path.absolute().as_posix(),
+            "--restore=false",
+            "--enc.key",
+            k,
+            "-dst.kind",
+            "fs",
+            "-dst.path",
+            encrypted_path.absolute().as_posix(),
+        ]
+    )
+    assert cp.returncode == 0
+
+    cp = subprocess.run(
+        [
+            BIN_PATH,
+            "-src.kind",
+            "fs",
+            "-src.path",
+            encrypted_path.absolute().as_posix(),
+            "--restore=true",
+            "-dst.kind",
+            "fs",
+            "-dst.path",
+            restored_path.absolute().as_posix(),
+            "--enc.key",
+            k,
+        ]
+    )
+    assert cp.returncode == 0
+
+    assert original_path.is_dir()
+    assert encrypted_path.is_file()
+    assert restored_path.is_dir()

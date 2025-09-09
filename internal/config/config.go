@@ -11,18 +11,6 @@ import (
 	"github.com/sethvargo/go-envconfig"
 )
 
-type EnvironmentConfig struct {
-	S3ForcePathStyle bool `env:"S3_FORCE_PATH_STYLE,default=false"`
-}
-
-func LoadEnvironmentConfig() (*EnvironmentConfig, error) {
-	var cfg EnvironmentConfig
-	if err := envconfig.Process(context.Background(), &cfg); err != nil {
-		return nil, fmt.Errorf("failed to process environment config: %w", err)
-	}
-	return &cfg, nil
-}
-
 func ConfigFromJsonPath(path string) (*Config, error) {
 
 	fd, err := os.Open(path)
@@ -67,6 +55,14 @@ func ConfigFromFlagset(flagset *flag.FlagSet, args []string) (*Config, error) {
 	return &cfg, nil
 }
 
+func ConfigFromEnv() (*Config, error) {
+	var cfg Config
+	if err := envconfig.Process(context.Background(), &cfg); err != nil {
+		return nil, fmt.Errorf("failed to process environment config: %w", err)
+	}
+	return &cfg, nil
+}
+
 type configLoader struct {
 	flagSet *flag.FlagSet
 	args    []string
@@ -88,12 +84,21 @@ func (cl *configLoader) Load() (*Config, error) {
 
 	configs := make([]*Config, 0, 2)
 
+	// cmd arg config
 	flagCfg, err := ConfigFromFlagset(cl.flagSet, cl.args)
 	if err != nil {
 		return nil, err
 	}
 	configs = append(configs, flagCfg)
 
+	// env config
+	envCfg, err := ConfigFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	configs = append(configs, envCfg)
+
+	// Json config
 	var jsonCfg *Config
 	if flagCfg.JsonConfigPath == "" {
 		jsonCfg = &Config{}
@@ -142,6 +147,8 @@ type Config struct {
 		Key string `json:"key"`
 	} `json:"encryption"`
 	Destination Location `json:"destination"`
+
+	S3ForcePathStyle bool `env:"S3_FORCE_PATH_STYLE,default=false"`
 }
 
 // Merges the provided configs
@@ -178,6 +185,8 @@ func mergeConfigs(configs ...*Config) *Config {
 		C.Destination.S3_Endpoint = weakAssign(C.Destination.S3_Endpoint, c.Destination.S3_Endpoint)
 		C.Destination.S3_Bucket = weakAssign(C.Destination.S3_Bucket, c.Destination.S3_Bucket)
 		C.Destination.S3_Region = weakAssign(C.Destination.S3_Region, c.Destination.S3_Region)
+
+		C.S3ForcePathStyle = weakAssign(C.S3ForcePathStyle, c.S3ForcePathStyle)
 	}
 
 	return C
