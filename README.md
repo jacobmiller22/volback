@@ -2,6 +2,15 @@
 
 CLI & libraries to backup data from various locations.
 
+# Supported Features
+
+- [x] Backing up files
+- [x] Backing up directories
+- [x] Compressing files
+- [x] Compressing directories
+- [x] Encrypting data
+- [x] Restoring ^^
+
 # Usage
 
 ```bash
