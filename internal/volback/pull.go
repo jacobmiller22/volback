@@ -26,7 +26,9 @@ func pullerFromConfig(cfg *config.Config) (Puller, error) {
 			bucket:   cfg.Source.S3_Bucket,
 		}, nil
 	case "fs":
-		return &FsPushPuller{}, nil
+		return &FsPushPuller{
+			restore: cfg.Restore,
+		}, nil
 	default:
 		return nil, fmt.Errorf("invalid source kind")
 	}

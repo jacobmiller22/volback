@@ -7,9 +7,10 @@ import (
 	"log"
 
 	"github.com/jacobmiller22/volume-backup/internal/config"
+	"github.com/jacobmiller22/volume-backup/internal/volback/transformers"
+
 	"github.com/jacobmiller22/volume-backup/internal/crypto"
 	"github.com/jacobmiller22/volume-backup/internal/pipes"
-	"github.com/jacobmiller22/volume-backup/internal/volback/transformers"
 )
 
 func NewExecutorFromConfig(cfg *config.Config) (*volbackExecutor, error) {
@@ -43,7 +44,7 @@ func NewExecutorFromConfig(cfg *config.Config) (*volbackExecutor, error) {
 		return nil, fmt.Errorf("error setting up backup pipeline: %w", err)
 	}
 	restorePipeline, err := pipes.NewIOPipeline([]pipes.IOPipe{
-		pipes.NewIOPipe("encrypt", (&transformers.DecryptionTransformer{Decryptor: decryptor}).Transform),
+		pipes.NewIOPipe("decrypt", (&transformers.DecryptionTransformer{Decryptor: decryptor}).Transform),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error setting up restore pipeline: %w", err)
@@ -78,7 +79,7 @@ func process(ctx context.Context, puller Puller, srcPath string, pl *pipes.IOPip
 		return err
 	}
 
-	r := pl.Execute(context.Background(), initialReader)
+	r := pl.Execute(ctx, initialReader)
 
 	if err := pusher.Push(r, dstPath); err != nil {
 		return fmt.Errorf("error while pushing: %w", err)

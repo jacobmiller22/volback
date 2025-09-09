@@ -28,7 +28,7 @@ func pusherFromConfig(cfg *config.Config) (Pusher, error) {
 			bucket:   cfg.Destination.S3_Bucket,
 		}, nil
 	case "fs":
-		return &FsPushPuller{}, nil
+		return &FsPushPuller{restore: cfg.Restore}, nil
 	default:
 		return nil, fmt.Errorf("invalid source kind")
 	}
