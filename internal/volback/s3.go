@@ -26,6 +26,7 @@ func newAwsCfg(loc *config.Location) (*aws.Config, error) {
 			),
 		),
 		awsconfig.WithBaseEndpoint(loc.S3_Endpoint),
+		awsconfig.WithRegion(loc.S3_Region),
 	)
 
 	if err != nil {

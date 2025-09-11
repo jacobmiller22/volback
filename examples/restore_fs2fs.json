@@ -1,0 +1,14 @@
+{
+	"source": {
+		"kind": "fs",
+		"path": "Makefile.backup"
+	},
+	"restore": true,
+	"encryption": {
+		"key": "temp size 16 key"
+	},
+	"destination": {
+		"kind": "fs",
+		"path": "backups"
+	}
+}
