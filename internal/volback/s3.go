@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func newAwsCfg(loc *config.Location) (*aws.Config, error) {
+func newAwsCfg(loc *config.S3location) (*aws.Config, error) {
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(
 		context.Background(),
@@ -59,8 +59,8 @@ func (p *S3PushPuller) Pull(path string) (io.Reader, error) {
 func (p *S3PushPuller) Push(r io.Reader, path string) error {
 
 	uploader := manager.NewUploader(p.s3client, func(u *manager.Uploader) {
-		u.PartSize = 8 * 1024 * 1024
-		u.Concurrency = 1
+		u.PartSize = 100 * 1024 * 1024
+
 	})
 
 	upParams := s3.PutObjectInput{
@@ -69,7 +69,9 @@ func (p *S3PushPuller) Push(r io.Reader, path string) error {
 		Body:   r,
 	}
 
-	_, err := uploader.Upload(context.Background(), &upParams)
+	_, err := uploader.Upload(context.Background(), &upParams, func(u *manager.Uploader) {
+		u.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+	})
 
 	return err
 }

@@ -16,7 +16,7 @@ type Puller interface {
 func pullerFromConfig(cfg *config.Config) (Puller, error) {
 	switch cfg.Source.Kind {
 	case "s3":
-		awsCfg, err := newAwsCfg(&cfg.Source)
+		awsCfg, err := newAwsCfg(&cfg.Source.S3location)
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"flag"
@@ -19,6 +20,12 @@ func main() {
 
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Configuration error: %v\n", err)
+	}
+
+	// Print the interpretted config
+	if cfg.CreateConfig {
+		fmt.Println(cfg.String())
+		return
 	}
 
 	executor, err := volback.NewExecutorFromConfig(cfg)
