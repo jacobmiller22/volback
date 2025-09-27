@@ -1,6 +1,7 @@
 package volback
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -16,9 +17,19 @@ type Pusher interface {
 func pusherFromConfig(cfg *config.Config) (Pusher, error) {
 
 	switch cfg.Destination.Kind {
+	case "b2":
+		b2client, err := newB2Cfg(context.TODO(), &cfg.Destination.B2location)
+		if err != nil {
+			return nil, err
+		}
+
+		return &B2Pusher{
+			b2client:   b2client,
+			bucketName: cfg.Destination.B2_Bucket,
+		}, nil
 	case "s3":
 
-		awsCfg, err := newAwsCfg(&cfg.Destination)
+		awsCfg, err := newAwsCfg(&cfg.Destination.S3location)
 		if err != nil {
 			return nil, err
 		}

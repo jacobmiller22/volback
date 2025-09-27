@@ -48,6 +48,12 @@ func ConfigFromFlagset(flagset *flag.FlagSet, args []string) (*Config, error) {
 	flagset.StringVar(&cfg.Destination.S3_AccessKeyId, "dst.s3-access-key-id", "", "The access key id")
 	flagset.StringVar(&cfg.Destination.S3_SecretAccessKey, "dst.s3-secret-access-key", "", "The secret access key")
 	flagset.StringVar(&cfg.Destination.S3_Region, "dst.s3-region", "", "The secret access key")
+	flagset.StringVar(&cfg.Destination.B2_Endpoint, "dst.b2-endpoint", "", "Hostname to use as an endpoint for b2 compatible storage")
+	flagset.StringVar(&cfg.Destination.B2_Bucket, "dst.b2-bucket", "", "Name of the bucket to backup to")
+	flagset.StringVar(&cfg.Destination.B2_ApplicationKeyId, "dst.b2-application-key-id", "", "The access key id")
+	flagset.StringVar(&cfg.Destination.B2_ApplicationKey, "dst.b2-application-key", "", "The secret access key")
+
+	flagset.BoolVar(&cfg.CreateConfig, "create-config", false, "Use this flag to produce a json version of the interpretted config")
 
 	if err := flagset.Parse(args); err != nil {
 		return nil, err
@@ -124,6 +130,13 @@ func (cl *configLoader) Load() (*Config, error) {
 	return mergeConfigs(configs...), nil
 }
 
+type B2location struct {
+	B2_ApplicationKeyId string `json:"b2_application_key_id"`
+	B2_ApplicationKey   string `json:"b2_application_key"`
+	B2_Endpoint         string `json:"b2_endpoint"`
+	B2_Bucket           string `json:"b2_bucket"`
+}
+
 type S3location struct {
 	S3_AccessKeyId     string `json:"s3_access_key_id"`
 	S3_SecretAccessKey string `json:"s3_secret_access_key"`
@@ -137,18 +150,26 @@ type Location struct {
 	Path string `json:"path"`
 
 	S3location
+	B2location
 }
 
 type Config struct {
-	JsonConfigPath string
-	Source         Location `json:"source"`
-	Restore        bool     `json:"restore"`
-	Encryption     struct {
+	Source     Location `json:"source"`
+	Restore    bool     `json:"restore"`
+	Encryption struct {
 		Key string `json:"key"`
 	} `json:"encryption"`
 	Destination Location `json:"destination"`
 
-	S3ForcePathStyle bool `env:"S3_FORCE_PATH_STYLE,default=false"`
+	JsonConfigPath   string `json:"-"`
+	S3ForcePathStyle bool   `json:"-" env:"S3_FORCE_PATH_STYLE,default=false"`
+	CreateConfig     bool   `json:"-"`
+}
+
+func (c *Config) String() string {
+	// Pretty-print the configuration
+	data, _ := json.MarshalIndent(c, "", "\t")
+	return string(data)
 }
 
 // Merges the provided configs
@@ -185,8 +206,13 @@ func mergeConfigs(configs ...*Config) *Config {
 		C.Destination.S3_Endpoint = weakAssign(C.Destination.S3_Endpoint, c.Destination.S3_Endpoint)
 		C.Destination.S3_Bucket = weakAssign(C.Destination.S3_Bucket, c.Destination.S3_Bucket)
 		C.Destination.S3_Region = weakAssign(C.Destination.S3_Region, c.Destination.S3_Region)
+		C.Destination.B2_ApplicationKeyId = weakAssign(C.Destination.B2_ApplicationKeyId, c.Destination.B2_ApplicationKeyId)
+		C.Destination.B2_ApplicationKey = weakAssign(C.Destination.B2_ApplicationKey, c.Destination.B2_ApplicationKey)
+		C.Destination.B2_Endpoint = weakAssign(C.Destination.B2_Endpoint, c.Destination.B2_Endpoint)
+		C.Destination.B2_Bucket = weakAssign(C.Destination.B2_Bucket, c.Destination.B2_Bucket)
 
 		C.S3ForcePathStyle = weakAssign(C.S3ForcePathStyle, c.S3ForcePathStyle)
+		C.CreateConfig = weakAssign(C.CreateConfig, c.CreateConfig)
 	}
 
 	return C

@@ -3,6 +3,7 @@ module github.com/jacobmiller22/volume-backup
 go 1.24.0
 
 require (
+	github.com/Backblaze/blazer v0.7.2
 	github.com/aws/aws-sdk-go-v2 v1.38.3
 	github.com/aws/aws-sdk-go-v2/config v1.31.6
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.10
