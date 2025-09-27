@@ -60,6 +60,7 @@ func (p *S3PushPuller) Push(r io.Reader, path string) error {
 
 	uploader := manager.NewUploader(p.s3client, func(u *manager.Uploader) {
 		u.PartSize = 8 * 1024 * 1024
+		u.Concurrency = 1
 	})
 
 	upParams := s3.PutObjectInput{
