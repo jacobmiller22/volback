@@ -59,7 +59,7 @@ func (p *S3PushPuller) Pull(path string) (io.Reader, error) {
 func (p *S3PushPuller) Push(r io.Reader, path string) error {
 
 	uploader := s3manager.NewUploader(p.s3client, func(u *s3manager.Uploader) {
-		u.PartSize = 1 * 1024 * 1024 // 1 MiB
+		u.PartSize = 5 * 1024 * 1024 // 5 MiB
 	})
 
 	upParams := s3.PutObjectInput{
