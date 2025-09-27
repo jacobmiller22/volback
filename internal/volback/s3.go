@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	awscredentials "github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -57,13 +58,17 @@ func (p *S3PushPuller) Pull(path string) (io.Reader, error) {
 
 func (p *S3PushPuller) Push(r io.Reader, path string) error {
 
+	uploader := manager.NewUploader(p.s3client, func(u *manager.Uploader) {
+		u.PartSize = 8 * 1024 * 1024
+	})
+
 	upParams := s3.PutObjectInput{
 		Bucket: aws.String(p.bucket),
 		Key:    aws.String(path),
 		Body:   r,
 	}
 
-	_, err := p.s3client.PutObject(context.Background(), &upParams)
+	_, err := uploader.Upload(context.Background(), &upParams)
 
 	return err
 }
